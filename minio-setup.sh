@@ -13,6 +13,7 @@ MINIO_ROOT_USER=$MINIO_ROOT_USER
 MINIO_ROOT_PASSWORD=$MINIO_ROOT_PASSWORD
 MINIO_VOLUMES=$MINIO_VOLUMES
 MINIO_OPTS='-C /etc/minio --address $SERVER_REFERENCE.$DOMAIN_NAME:$MINIO_PORT --console-address :$MINIO_CONSOLE_PORT'
+MINIO_PROMETHEUS_AUTH_TYPE=public
 EOF"
 sudo apt update
 curl -O https://dl.min.io/server/minio/release/linux-amd64/minio
