@@ -1,6 +1,6 @@
-read -p "Domain name or IP adress: " DOMAIN_NAME
-read -p "Email address for Certbot: " EMAIL_ADDRESS
+read -p "Domain name or IP address: " DOMAIN_NAME
 read -p "Server reference (ex: s1, s2 ...): " SERVER_REFERENCE
+read -p "Cloudflare API token: " CLOUDFLARE_API_TOKEN
 read -e -p "Minio root username: " -i "minio" MINIO_ROOT_USER
 read -e -p "Minio root password: " -i "$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)" MINIO_ROOT_PASSWORD
 read -e -p "Minio port: " -i "9000" MINIO_PORT
@@ -12,7 +12,7 @@ sudo bash -c "cat <<EOF> minio.config
 MINIO_ROOT_USER=$MINIO_ROOT_USER
 MINIO_ROOT_PASSWORD=$MINIO_ROOT_PASSWORD
 MINIO_VOLUMES=$MINIO_VOLUMES
-MINIO_OPTS='-C /etc/minio --address $SERVER_REFERENCE.$DOMAIN_NAME:$MINIO_PORT --console-address :$MINIO_CONSOLE_PORT'
+MINIO_OPTS='-C /etc/minio --address :$MINIO_PORT --console-address :$MINIO_CONSOLE_PORT'
 MINIO_PROMETHEUS_AUTH_TYPE=public
 EOF"
 sudo apt update
@@ -26,36 +26,52 @@ sudo mkdir -p /data
 sudo chown minio-user:minio-user /data
 sudo mkdir -p /etc/minio
 sudo chown minio-user:minio-user /etc/minio
-sudo cp ./minio.config /etc/default/minio
-sudo cp ./minio.service /etc/systemd/system
+sudo mv ./minio.config /etc/default/minio
+sudo mv ./minio.service /etc/systemd/system
 sudo systemctl daemon-reload
-sudo systemctl enable minio
-sudo systemctl start minio
+sudo systemctl enable --now minio
 ## < Minio related ###
 
-## > HTTPS related ###
-sudo apt install software-properties-common -y
-sudo add-apt-repository universe
-sudo apt update
-sudo apt install certbot -y
-sudo certbot certonly --standalone -d "$SERVER_REFERENCE"."$DOMAIN_NAME" --non-interactive --staple-ocsp --agree-tos -m "$EMAIL_ADDRESS"
-sudo cp /etc/letsencrypt/live/"$SERVER_REFERENCE"."$DOMAIN_NAME"/privkey.pem /etc/minio/certs/private.key
-sudo cp /etc/letsencrypt/live/"$SERVER_REFERENCE"."$DOMAIN_NAME"/fullchain.pem /etc/minio/certs/public.crt
-sudo chown minio-user:minio-user /etc/minio/certs/private.key
-sudo chown minio-user:minio-user /etc/minio/certs/public.crt
-sudo systemctl restart minio
-## < HTTPS related ###
+## > Reverse proxy related ###
+curl -o caddy "https://caddyserver.com/api/download?os=linux&arch=amd64&p=github.com%2Fcaddy-dns%2Fcloudflare"
+curl -O "https://raw.githubusercontent.com/caddyserver/dist/master/init/caddy.service"
+sudo chmod +x caddy
+sudo chown root:root caddy
+sudo mv caddy /usr/bin
+sudo mv caddy.service /etc/systemd/system
+sudo mkdir -p /var/log/caddy /etc/caddy
+sudo chown caddy:caddy /var/log/caddy
+sudo bash -c "cat <<EOF> Caddyfile
+{
+        acme_dns cloudflare $CLOUDFLARE_API_TOKEN
+}
 
-## > Certbot post-renew hook
-sudo bash -c "cat <<EOF> /etc/letsencrypt/renewal-hooks/post/postRenew.sh
-sudo cp /etc/letsencrypt/live/$SERVER_REFERENCE.$DOMAIN_NAME/privkey.pem /etc/minio/certs/private.key
-sudo cp /etc/letsencrypt/live/$SERVER_REFERENCE.$DOMAIN_NAME/fullchain.pem /etc/minio/certs/public.crt
-sudo chown minio-user:minio-user /etc/minio/certs/private.key
-sudo chown minio-user:minio-user /etc/minio/certs/public.crt
-sudo systemctl restart minio
+$SERVER_REFERENCE.$DOMAIN_NAME {
+        log {
+                output file /var/log/caddy/caddy.log
+        }
+        reverse_proxy localhost:$MINIO_PORT
+}
+
+console.$SERVER_REFERENCE.$DOMAIN_NAME {
+        log {
+                output file /var/log/caddy/console.log
+        }
+        reverse_proxy localhost:$MINIO_CONSOLE_PORT
+}
 EOF"
-sudo chmod +x /etc/letsencrypt/renewal-hooks/post/postRenew.sh
-## < Certbot post-renew hook
+sudo mv Caddyfile /etc/caddy/Caddyfile
+sudo groupadd --system caddy
+sudo useradd --system \
+    --gid caddy \
+    --create-home \
+    --home-dir /var/lib/caddy \
+    --shell /usr/sbin/nologin \
+    --comment "Caddy web server" \
+    caddy
+sudo systemctl daemon-reload
+sudo systemctl enable --now caddy
+## < Reverse proxy related ###
 
-printf "\nInstallation completed, you should access Minio console here: \nhttps://%s.%s:%s\nLogin: %s\nPassword: %s\n" \
-"$SERVER_REFERENCE" "$DOMAIN_NAME" "$MINIO_CONSOLE_PORT" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
+printf "\nInstallation completed, you should access Minio console here: \nhttps://console.%s.%s\nLogin: %s\nPassword: %s\n" \
+"$SERVER_REFERENCE" "$DOMAIN_NAME" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
