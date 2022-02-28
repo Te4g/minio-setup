@@ -22,10 +22,8 @@ sudo chmod +x minio
 sudo mv minio /usr/local/bin
 sudo useradd -r minio-user -s /sbin/nologin
 sudo chown minio-user:minio-user /usr/local/bin/minio
-sudo mkdir -p /data
-sudo chown minio-user:minio-user /data
-sudo mkdir -p /etc/minio
-sudo chown minio-user:minio-user /etc/minio
+sudo mkdir -p /data /etc/minio
+sudo chown minio-user:minio-user /data /etc/minio
 sudo mv ./minio.config /etc/default/minio
 sudo mv ./minio.service /etc/systemd/system
 sudo systemctl daemon-reload
