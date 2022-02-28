@@ -31,6 +31,14 @@ sudo systemctl enable --now minio
 ## < Minio related ###
 
 ## > Reverse proxy related ###
+sudo groupadd --system caddy
+sudo useradd --system \
+    --gid caddy \
+    --create-home \
+    --home-dir /var/lib/caddy \
+    --shell /usr/sbin/nologin \
+    --comment "Caddy web server" \
+    caddy
 curl -o caddy "https://caddyserver.com/api/download?os=linux&arch=amd64&p=github.com%2Fcaddy-dns%2Fcloudflare"
 curl -O "https://raw.githubusercontent.com/caddyserver/dist/master/init/caddy.service"
 sudo chmod +x caddy
@@ -48,6 +56,9 @@ $SERVER_REFERENCE.$DOMAIN_NAME {
         log {
                 output file /var/log/caddy/caddy.log
         }
+        handle / {
+                respond 404
+        }
         reverse_proxy localhost:$MINIO_PORT
 }
 
@@ -59,14 +70,6 @@ console.$SERVER_REFERENCE.$DOMAIN_NAME {
 }
 EOF"
 sudo mv Caddyfile /etc/caddy/Caddyfile
-sudo groupadd --system caddy
-sudo useradd --system \
-    --gid caddy \
-    --create-home \
-    --home-dir /var/lib/caddy \
-    --shell /usr/sbin/nologin \
-    --comment "Caddy web server" \
-    caddy
 sudo systemctl daemon-reload
 sudo systemctl enable --now caddy
 ## < Reverse proxy related ###
