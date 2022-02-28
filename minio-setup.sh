@@ -28,6 +28,7 @@ sudo mv ./minio.config /etc/default/minio
 sudo mv ./minio.service /etc/systemd/system
 sudo systemctl daemon-reload
 sudo systemctl enable --now minio
+sudo systemctl restart minio
 ## < Minio related ###
 
 ## > Reverse proxy related ###
@@ -72,6 +73,7 @@ EOF"
 sudo mv Caddyfile /etc/caddy/Caddyfile
 sudo systemctl daemon-reload
 sudo systemctl enable --now caddy
+sudo systemctl reload caddy
 ## < Reverse proxy related ###
 
 printf "\nInstallation completed, you should access Minio console here: \nhttps://console.%s.%s\nLogin: %s\nPassword: %s\n" \
